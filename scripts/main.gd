@@ -477,6 +477,7 @@ func _supernova_merge(a: SpaceBody, b: SpaceBody) -> void:
 	var vel := (a.velocity * a.mass + b.velocity * b.mass) / total
 	var flash_size := maxf(a.radius, b.radius) * 2.2
 	_burst(pos, Color(1.0, 0.85, 0.55), flash_size, "supernova", 1.3)
+	var massive := a.mass > 5000000.0 and b.mass > 5000000.0
 	bodies.erase(a)
 	bodies.erase(b)
 	if selected == a or selected == b:
@@ -486,13 +487,31 @@ func _supernova_merge(a: SpaceBody, b: SpaceBody) -> void:
 	b.visible = false
 	a.queue_free()
 	b.queue_free()
+	if massive:
+		_spawn_nebula(pos, vel, flash_size * 2.4)
 	var bh_mass := maxf(total * 0.35, BLACK_HOLE_MASS)
 	var bh := _create_body(pos, vel, bh_mass, 0.0, Color(0.05, 0.04, 0.08), "Чёрная дыра", true)
 	bh.is_black_hole = true
 	_apply_mass_kind(bh)
 	_refresh_scripted_orbits(bh)
 	bh.queue_redraw()
-	hud.show_hint("Сверхновая: столкновение звёзд породило чёрную дыру")
+	if massive:
+		hud.show_hint("Сверхновая: образовалась туманность и чёрная дыра")
+	else:
+		hud.show_hint("Сверхновая: столкновение звёзд породило чёрную дыру")
+
+
+func _spawn_nebula(pos: Vector2, vel: Vector2, size: float) -> void:
+	var neb := SpaceBurst.new()
+	neb.position = pos
+	neb.color = Color(0.7, 0.45, 1.0, 0.55)
+	neb.size = size
+	neb.kind = "nebula"
+	neb.duration = 8.0
+	world.add_child(neb)
+	# медленно дрейфующая туманность
+	var tw := create_tween()
+	tw.tween_property(neb, "position", pos + vel.normalized() * 8.0, 8.0)
 
 
 func _planetary_merge(a: SpaceBody, b: SpaceBody) -> void:
@@ -505,7 +524,9 @@ func _planetary_merge(a: SpaceBody, b: SpaceBody) -> void:
 	var pos := (a.position * a.mass + b.position * b.mass) / total
 	var vel := (a.velocity * a.mass + b.velocity * b.mass) / total
 	var base_color: Color = big.color.lerp(small.color, small.mass / total)
-	var hot_color := base_color.lerp(Color(1.0, 0.35, 0.15), 0.55)
+	# Разогрев ~500-1000C: яркий оранжево-красный оттенок
+	var heat := _rng.randf_range(0.65, 0.9)
+	var hot_color := base_color.lerp(Color(1.0, 0.28, 0.08), heat)
 
 	var frag_count := clampi(int(round(2.0 + total / 1800.0)), 2, 5)
 	var frag_total_mass := total * 0.08
@@ -522,10 +543,12 @@ func _planetary_merge(a: SpaceBody, b: SpaceBody) -> void:
 		var dir := (normal.rotated(spread) + tangent * _rng.randf_range(-0.4, 0.4)).normalized()
 		var off := dir * (maxf(big.radius, small.radius) * 0.9 + _rng.randf_range(4.0, 12.0))
 		var fvel := vel + dir * _rng.randf_range(12.0, 34.0)
-		var frag := _create_body(pos + off, fvel, frag_mass, frag_radius * _rng.randf_range(0.85, 1.15), hot_color.lightened(_rng.randf_range(0.0, 0.2)), "Осколок")
+		var frag_hot := hot_color.lerp(Color(1.0, 0.55, 0.15), _rng.randf_range(0.0, 0.35))
+		var frag := _create_body(pos + off, fvel, frag_mass, frag_radius * _rng.randf_range(0.85, 1.15), frag_hot, "Осколок")
 		frag.is_fragment = true
 		frag.tidal_immune = 5.0
 		frag.orbit_parent = null
+		_start_planet_cooling(frag, frag_hot, base_color.lightened(_rng.randf_range(0.0, 0.2)), 3.0)
 
 	var remnant_mass := total - frag_total_mass
 	var remnant := _create_body(pos, vel, remnant_mass, sqrt(maxf(1.0, remnant_mass)) * 0.5, hot_color, big.body_name)
@@ -534,7 +557,7 @@ func _planetary_merge(a: SpaceBody, b: SpaceBody) -> void:
 	remnant.ring_outer_ratio = 0.0
 	_apply_mass_kind(remnant)
 	remnant.queue_redraw()
-	_start_planet_cooling(remnant, hot_color, base_color)
+	_start_planet_cooling(remnant, hot_color, base_color, 5.0)
 
 	bodies.erase(a)
 	bodies.erase(b)
@@ -548,13 +571,17 @@ func _planetary_merge(a: SpaceBody, b: SpaceBody) -> void:
 	hud.show_hint("Столкновение планет: образовалась новая планета и мелкие обломки")
 
 
-func _start_planet_cooling(b: SpaceBody, hot_color: Color, target_color: Color) -> void:
+func _start_planet_cooling(b: SpaceBody, hot_color: Color, target_color: Color, dur: float = 4.0) -> void:
+	var body_ref: WeakRef = weakref(b)
 	var tw := create_tween()
 	tw.tween_method(func(c: Color):
-		if is_instance_valid(b):
-			b.color = c
-			b.queue_redraw()
-	, hot_color, target_color, 4.0)
+		var obj: Object = body_ref.get_ref()
+		if obj != null and is_instance_valid(obj):
+			var sb := obj as SpaceBody
+			if sb != null:
+				sb.color = c
+				sb.queue_redraw()
+	, hot_color, target_color, dur)
 
 
 func _disrupt(b: SpaceBody, star: SpaceBody) -> void:
