@@ -143,6 +143,17 @@ func _draw_orbit(b: SpaceBody) -> void:
 		return
 	var c := Color(b.color.r, b.color.g, b.color.b, 0.38 if not b.is_star else 0.28)
 	var width: float = maxf(1.0, 1.4 / camera.zoom.x)
+	if b.scripted:
+		var ecc: float = clampf(b.orbit_eccentricity, 0.0, 0.95)
+		if ecc > 0.0001:
+			var a: float = radius
+			var minor: float = a * sqrt(maxf(0.0, 1.0 - ecc * ecc))
+			var peri := Vector2(cos(b.orbit_periapsis), sin(b.orbit_periapsis))
+			var ec: Vector2 = center - peri * (a * ecc)
+			draw_polyline(_ellipse_points(ec, a, minor, b.orbit_periapsis), c, width, true)
+		else:
+			draw_arc(center, radius, 0.0, TAU, 128, c, width, true)
+		return
 	if b.is_star and bool(orbit.get("barycentric", false)):
 		draw_arc(center, radius, 0.0, TAU, 128, c, width, true)
 		return
@@ -150,17 +161,17 @@ func _draw_orbit(b: SpaceBody) -> void:
 	if not bool(ellipse.get("valid", false)):
 		draw_arc(center, radius, 0.0, TAU, 128, c, width, true)
 		return
-	var ec: Vector2 = ellipse["center"]
-	var a: float = float(ellipse["a"])
-	var minor: float = float(ellipse["b"])
-	var angle: float = float(ellipse["angle"])
+	draw_polyline(_ellipse_points(ellipse["center"], float(ellipse["a"]), float(ellipse["b"]), float(ellipse["angle"])), c, width, true)
+
+
+func _ellipse_points(center: Vector2, a: float, minor: float, angle: float) -> PackedVector2Array:
 	var pts := PackedVector2Array()
 	var segments := 96
 	for i in segments:
 		var t := TAU * float(i) / float(segments)
-		pts.append(ec + Vector2(cos(t) * a, sin(t) * minor).rotated(angle))
+		pts.append(center + Vector2(cos(t) * a, sin(t) * minor).rotated(angle))
 	pts.append(pts[0])
-	draw_polyline(pts, c, width, true)
+	return pts
 
 
 func _orbit_ellipse_for(b: SpaceBody, orbit: Dictionary) -> Dictionary:
@@ -211,7 +222,7 @@ func _orbit_center_for(b: SpaceBody) -> Dictionary:
 	var bary_mass: float = float(bary["mass"])
 	var bary_count: int = int(bary["count"])
 	if b.is_star:
-		if b.scripted and b.orbit_radius > 0.0:
+		if bary_count >= 2 and b.orbit_radius > 0.0:
 			return {
 				"center": bary_center,
 				"velocity": bary_vel,
@@ -353,9 +364,37 @@ func _update_scripted(dt: float) -> void:
 		elif ab_mass > 0.0:
 			center = ab_center
 			base_vel = ab_vel
-		var dir := Vector2(cos(b.orbit_angle), sin(b.orbit_angle))
-		b.position = center + dir * b.orbit_radius
-		b.velocity = base_vel + Vector2(-dir.y, dir.x) * b.orbit_speed * b.orbit_radius
+		var state := _scripted_orbit_state(b.orbit_radius, b.orbit_eccentricity, b.orbit_periapsis, b.orbit_angle, b.orbit_speed)
+		var rel_pos: Vector2 = state["pos"]
+		var rel_vel: Vector2 = state["vel"]
+		b.position = center + rel_pos
+		b.velocity = base_vel + rel_vel
+
+
+func _eccentric_anomaly(mean_anomaly: float, e: float) -> float:
+	var mean := fposmod(mean_anomaly, TAU)
+	var E := mean + e * sin(mean)
+	for i in 24:
+		var f := E - e * sin(E) - mean
+		var fp := 1.0 - e * cos(E)
+		if absf(fp) < 0.000001:
+			break
+		var d := f / fp
+		E -= d
+		if absf(d) < 0.000000001:
+			break
+	return E
+
+
+func _scripted_orbit_state(a: float, e: float, periapsis: float, mean_anomaly: float, mean_motion: float) -> Dictionary:
+	var E := _eccentric_anomaly(mean_anomaly, e)
+	var cos_e := cos(E)
+	var sin_e := sin(E)
+	var minor := a * sqrt(maxf(0.0, 1.0 - e * e))
+	var pos := Vector2(a * (cos_e - e), minor * sin_e).rotated(periapsis)
+	var e_dot := mean_motion / maxf(0.000001, 1.0 - e * cos_e)
+	var vel := Vector2(-a * sin_e, minor * cos_e).rotated(periapsis) * e_dot
+	return {"pos": pos, "vel": vel}
 
 
 func _step(h: float) -> void:
@@ -776,7 +815,7 @@ func _preset_solar() -> void:
 		{"r": 2250.0, "mass": 70.0, "rad": 4.2, "color": Color(0.88, 0.9, 0.94), "name": "Хаумея"},
 		{"r": 2450.0, "mass": 55.0, "rad": 3.6, "color": Color(0.72, 0.56, 0.48), "name": "Макемаке"},
 		{"r": 2800.0, "mass": 90.0, "rad": 4.0, "color": Color(0.86, 0.88, 0.95), "name": "Эрида"},
-		{"r": 3300.0, "mass": 60.0, "rad": 3.6, "color": Color(0.82, 0.48, 0.42), "name": "Седна"},
+		{"r": 3300.0, "mass": 60.0, "rad": 3.6, "color": Color(0.82, 0.48, 0.42), "name": "Седна", "e": 0.85, "peri": 0.0, "m0": 1.5707963267948966},
 	]
 	var made := {}
 	for p in planets:
@@ -786,7 +825,11 @@ func _preset_solar() -> void:
 	for p in dwarfs:
 		var d: SpaceBody = _orbit_body(sun, float(p["r"]), float(p["mass"]), float(p["rad"]), p["color"], p["name"])
 		d.is_dwarf = true
-		_script_orbit(d, sun, float(p["r"]))
+		var ecc := float(p.get("e", 0.0))
+		if ecc > 0.0:
+			_script_orbit(d, sun, float(p["r"]), ecc, float(p.get("peri", 0.0)), float(p.get("m0", 0.0)))
+		else:
+			_script_orbit(d, sun, float(p["r"]))
 		made[p["name"]] = d
 	_set_ring(made["Юпитер"], 1.35, 2.05, Color(0.85, 0.78, 0.62, 0.18), -0.25)
 	_set_ring(made["Сатурн"], 1.35, 2.55, Color(0.96, 0.86, 0.62, 0.68), -0.38)
@@ -811,8 +854,10 @@ func _preset_binary() -> void:
 	var m := 2400000.0
 	var d := 420.0
 	var v := sqrt(G * m / (2.0 * d))
-	_create_body(Vector2(-d * 0.5, 0.0), Vector2(0.0, v), m, 32.0, Color(1.0, 0.72, 0.36), "Звезда A", true)
-	_create_body(Vector2(d * 0.5, 0.0), Vector2(0.0, -v), m, 32.0, Color(0.6, 0.82, 1.0), "Звезда B", true)
+	var star_a := _create_body(Vector2(-d * 0.5, 0.0), Vector2(0.0, v), m, 32.0, Color(1.0, 0.72, 0.36), "Звезда A", true)
+	var star_b := _create_body(Vector2(d * 0.5, 0.0), Vector2(0.0, -v), m, 32.0, Color(0.6, 0.82, 1.0), "Звезда B", true)
+	star_a.orbit_radius = d * 0.5
+	star_b.orbit_radius = d * 0.5
 	var total := m * 2.0
 	for r_value in [820.0, 1080.0]:
 		var r: float = r_value
@@ -935,8 +980,10 @@ func _preset_system(sys: Dictionary) -> void:
 		var vrel := sqrt(G * total / d)
 		var r1 := d * m2 / total
 		var r2 := d * m1 / total
-		_create_body(Vector2(-r1, 0.0), Vector2(0.0, vrel * m2 / total), m1, rad1, col1, nm + " A", true)
-		_create_body(Vector2(r2, 0.0), Vector2(0.0, -vrel * m1 / total), m2, rad2, col2, nm + " B", true)
+		var star_a := _create_body(Vector2(-r1, 0.0), Vector2(0.0, vrel * m2 / total), m1, rad1, col1, nm + " A", true)
+		var star_b := _create_body(Vector2(r2, 0.0), Vector2(0.0, -vrel * m1 / total), m2, rad2, col2, nm + " B", true)
+		star_a.orbit_radius = r1
+		star_b.orbit_radius = r2
 		inner = maxf(inner, d * 1.5 + 220.0)
 		inner = maxf(inner, d * 0.5 + rad1 + rad2 + 160.0)
 		for i in count:
@@ -1244,12 +1291,22 @@ func _add_scripted_moon(parent: SpaceBody, dist: float, mass: float, rad: float,
 	return moon
 
 
-func _script_orbit(b: SpaceBody, parent: SpaceBody, dist: float) -> void:
+func _script_orbit(b: SpaceBody, parent: SpaceBody, dist: float, e: float = 0.0, periapsis: float = 0.0, mean_anomaly: float = NAN) -> void:
 	b.scripted = true
 	b.orbit_parent = parent
 	b.orbit_radius = dist
-	b.orbit_angle = (b.position - parent.position).angle()
+	b.orbit_eccentricity = clampf(e, 0.0, 0.95)
+	b.orbit_periapsis = periapsis
 	b.orbit_speed = _circular_speed(parent.mass, dist) / dist
+	if b.orbit_eccentricity > 0.0001:
+		b.orbit_angle = 0.0 if is_nan(mean_anomaly) else mean_anomaly
+		var state := _scripted_orbit_state(dist, b.orbit_eccentricity, periapsis, b.orbit_angle, b.orbit_speed)
+		var rel_pos: Vector2 = state["pos"]
+		var rel_vel: Vector2 = state["vel"]
+		b.position = parent.position + rel_pos
+		b.velocity = parent.velocity + rel_vel
+	else:
+		b.orbit_angle = (b.position - parent.position).angle()
 
 
 func _set_ring(b: SpaceBody, inner: float, outer: float, color: Color, tilt: float) -> void:

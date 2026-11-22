@@ -22,6 +22,8 @@ var collides_scripted := false
 var orbit_parent = null
 var orbit_center := Vector2.ZERO
 var orbit_radius := 0.0
+var orbit_eccentricity := 0.0
+var orbit_periapsis := 0.0
 var orbit_angle := 0.0
 var orbit_speed := 0.0
 
