@@ -787,7 +787,7 @@ func _build_settings_overlay() -> void:
 	box.add_child(bary)
 
 	_music_check = CheckButton.new()
-	_music_check.text = "Музыка космоса"
+	_music_check.text = "Галактический гул"
 	_music_check.button_pressed = _music_enabled
 	_music_check.add_theme_font_size_override("font_size", 24)
 	_music_check.add_theme_color_override("font_color", ON_SURFACE)
