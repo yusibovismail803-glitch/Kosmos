@@ -56,3 +56,4 @@
 - 2026-11-22: Иконка приложения заменена на присланное изображение 2048×2048: `icon.jpg`, `config/icon="res://icon.jpg"` в `project.godot`. APK после иконки и орбит осколков не пересобирался.
 - 2026-11-22: APK пересобран и подписан с новой иконкой и орбитами осколков (`juego.apk`, 29,557,969 bytes), показан в чате.
 - 2026-11-22: Проект загружен в существующий GitHub-репозиторий `yusibovismail803-glitch/Kosmos` (`main`, `fd356c7`). В репозиторий не вошли APK, `.godot/`, `.agent/`, `export_presets.cfg`; удалены устаревшие `test_*.gd.uid` и старый `icon.svg`.
+- 2026-11-22: Создан GitHub-релиз `v1.0` с подписанным `juego.apk` как вложением: https://github.com/yusibovismail803-glitch/Kosmos/releases/tag/v1.0
