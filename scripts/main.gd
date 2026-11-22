@@ -429,8 +429,6 @@ func _step(h: float) -> void:
 
 
 func _resolve_collisions() -> void:
-	if not collisions_enabled:
-		return
 	var merged := true
 	while merged:
 		merged = false
@@ -439,11 +437,13 @@ func _resolve_collisions() -> void:
 			for j in range(i + 1, n):
 				var a := bodies[i]
 				var b := bodies[j]
-				if a.scripted and b.scripted:
-					if not a.collides_scripted and not b.collides_scripted:
+				var star_collision := a.is_star and b.is_star
+				if not star_collision:
+					if a.scripted and b.scripted:
+						if not a.collides_scripted and not b.collides_scripted:
+							continue
+					elif (a.scripted and not a.collides_scripted) or (b.scripted and not b.collides_scripted):
 						continue
-				elif (a.scripted and not a.collides_scripted) or (b.scripted and not b.collides_scripted):
-					continue
 				var limit := (a.radius + b.radius) * 0.9
 				if a.position.distance_squared_to(b.position) < limit * limit:
 					_merge(a, b)
@@ -469,6 +469,92 @@ func _check_disruptions() -> void:
 			if d < s.radius * 3.0 and d > s.radius * 0.8:
 				_disrupt(b, s)
 				break
+
+
+func _supernova_merge(a: SpaceBody, b: SpaceBody) -> void:
+	var total := a.mass + b.mass
+	var pos := (a.position * a.mass + b.position * b.mass) / total
+	var vel := (a.velocity * a.mass + b.velocity * b.mass) / total
+	var flash_size := maxf(a.radius, b.radius) * 2.2
+	_burst(pos, Color(1.0, 0.85, 0.55), flash_size, "supernova", 1.3)
+	bodies.erase(a)
+	bodies.erase(b)
+	if selected == a or selected == b:
+		_select(null)
+		following = false
+	a.visible = false
+	b.visible = false
+	a.queue_free()
+	b.queue_free()
+	var bh_mass := maxf(total * 0.35, BLACK_HOLE_MASS)
+	var bh := _create_body(pos, vel, bh_mass, 0.0, Color(0.05, 0.04, 0.08), "Чёрная дыра", true)
+	bh.is_black_hole = true
+	_apply_mass_kind(bh)
+	_refresh_scripted_orbits(bh)
+	bh.queue_redraw()
+	hud.show_hint("Сверхновая: столкновение звёзд породило чёрную дыру")
+
+
+func _planetary_merge(a: SpaceBody, b: SpaceBody) -> void:
+	var big := a
+	var small := b
+	if b.mass > a.mass:
+		big = b
+		small = a
+	var total := a.mass + b.mass
+	var pos := (a.position * a.mass + b.position * b.mass) / total
+	var vel := (a.velocity * a.mass + b.velocity * b.mass) / total
+	var base_color: Color = big.color.lerp(small.color, small.mass / total)
+	var hot_color := base_color.lerp(Color(1.0, 0.35, 0.15), 0.55)
+
+	var frag_count := clampi(int(round(2.0 + total / 1800.0)), 2, 5)
+	var frag_total_mass := total * 0.08
+	var frag_mass := frag_total_mass / float(frag_count)
+	var frag_radius := clampf(sqrt(frag_mass) * 0.35, 1.6, 3.2)
+	var normal := (small.position - big.position)
+	if normal.length_squared() < 0.001:
+		normal = Vector2.RIGHT.rotated(_rng.randf_range(0.0, TAU))
+	normal = normal.normalized()
+	var tangent := Vector2(-normal.y, normal.x)
+
+	for i in frag_count:
+		var spread := _rng.randf_range(-0.8, 0.8)
+		var dir := (normal.rotated(spread) + tangent * _rng.randf_range(-0.4, 0.4)).normalized()
+		var off := dir * (maxf(big.radius, small.radius) * 0.9 + _rng.randf_range(4.0, 12.0))
+		var fvel := vel + dir * _rng.randf_range(12.0, 34.0)
+		var frag := _create_body(pos + off, fvel, frag_mass, frag_radius * _rng.randf_range(0.85, 1.15), hot_color.lightened(_rng.randf_range(0.0, 0.2)), "Осколок")
+		frag.is_fragment = true
+		frag.tidal_immune = 5.0
+		frag.orbit_parent = null
+
+	var remnant_mass := total - frag_total_mass
+	var remnant := _create_body(pos, vel, remnant_mass, sqrt(maxf(1.0, remnant_mass)) * 0.5, hot_color, big.body_name)
+	remnant.is_dwarf = big.is_dwarf or small.is_dwarf
+	remnant.ring_inner_ratio = 0.0
+	remnant.ring_outer_ratio = 0.0
+	_apply_mass_kind(remnant)
+	remnant.queue_redraw()
+	_start_planet_cooling(remnant, hot_color, base_color)
+
+	bodies.erase(a)
+	bodies.erase(b)
+	if selected == a or selected == b:
+		_select(remnant)
+	a.visible = false
+	b.visible = false
+	a.queue_free()
+	b.queue_free()
+	_burst(pos, hot_color, maxf(big.radius, small.radius) * 1.2, "ring", 0.9)
+	hud.show_hint("Столкновение планет: образовалась новая планета и мелкие обломки")
+
+
+func _start_planet_cooling(b: SpaceBody, hot_color: Color, target_color: Color) -> void:
+	var tw := create_tween()
+	tw.tween_method(func(c: Color):
+		if is_instance_valid(b):
+			b.color = c
+			b.queue_redraw()
+	, hot_color, target_color, 4.0)
 
 
 func _disrupt(b: SpaceBody, star: SpaceBody) -> void:
@@ -506,6 +592,12 @@ func _merge(a: SpaceBody, b: SpaceBody) -> void:
 	if b.mass > a.mass:
 		big = b
 		small = a
+	if big.is_star and small.is_star:
+		_supernova_merge(big, small)
+		return
+	if not big.is_star and not small.is_star:
+		_planetary_merge(big, small)
+		return
 
 	var total := a.mass + b.mass
 	var pos := (a.position * a.mass + b.position * b.mass) / total
@@ -529,11 +621,13 @@ func _merge(a: SpaceBody, b: SpaceBody) -> void:
 	_burst(pos, big.color, big.radius)
 
 
-func _burst(pos: Vector2, color: Color, size: float) -> void:
+func _burst(pos: Vector2, color: Color, size: float, kind: String = "ring", dur: float = 0.7) -> void:
 	var fx := SpaceBurst.new()
 	fx.position = pos
 	fx.color = color
 	fx.size = size
+	fx.kind = kind
+	fx.duration = dur
 	world.add_child(fx)
 
 
@@ -1235,6 +1329,12 @@ func _refresh_scripted_orbits(changed: SpaceBody) -> void:
 	for s in bodies:
 		if s.is_star:
 			total_star_mass += s.mass
+	# Обновить собственную орбиту изменённого тела (например, Проксима вокруг барицентра)
+	if changed.scripted and changed.orbit_radius > 0.0:
+		if is_instance_valid(changed.orbit_parent):
+			changed.orbit_speed = _circular_speed(changed.orbit_parent.mass, changed.orbit_radius) / changed.orbit_radius
+		elif changed.is_star:
+			changed.orbit_speed = sqrt(G * total_star_mass / pow(changed.orbit_radius, 3.0))
 	for s in bodies:
 		if not s.scripted or s == changed or s.orbit_radius <= 0.0:
 			continue
