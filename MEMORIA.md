@@ -55,3 +55,4 @@
 - 2026-11-22: В режиме «Орбита» орбиты осколков теперь рисуются (раньше они пропускались в `_draw()`). Осколки из `_disrupt()` и `_preset_collision()` получают `orbit_parent`/`orbit_radius`, чтобы эллипс считался вокруг своей звезды, а не общего барицентра. Headless: ICON_OK 2048×2048/PRESET_FRAGMENTS_OK 24/FRAGMENT_ORBIT_DRAW_OK/DISRUPT_FRAGMENTS_OK 5. Удалён `test_fragments.gd`.
 - 2026-11-22: Иконка приложения заменена на присланное изображение 2048×2048: `icon.jpg`, `config/icon="res://icon.jpg"` в `project.godot`. APK после иконки и орбит осколков не пересобирался.
 - 2026-11-22: APK пересобран и подписан с новой иконкой и орбитами осколков (`juego.apk`, 29,557,969 bytes), показан в чате.
+- 2026-11-22: Проект загружен в существующий GitHub-репозиторий `yusibovismail803-glitch/Kosmos` (`main`, `fd356c7`). В репозиторий не вошли APK, `.godot/`, `.agent/`, `export_presets.cfg`; удалены устаревшие `test_*.gd.uid` и старый `icon.svg`.
