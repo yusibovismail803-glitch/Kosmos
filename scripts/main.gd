@@ -44,6 +44,7 @@ var spawn_mode := false
 var spawn_kind := "planet"
 var selected: SpaceBody = null
 var current_preset := "solar"
+var collisions_enabled := true
 var following := false
 var show_barycenter := true
 var satellite_distance := 24.0
@@ -389,6 +390,8 @@ func _step(h: float) -> void:
 
 
 func _resolve_collisions() -> void:
+	if not collisions_enabled:
+		return
 	var merged := true
 	while merged:
 		merged = false
@@ -412,6 +415,8 @@ func _resolve_collisions() -> void:
 
 
 func _check_disruptions() -> void:
+	if not collisions_enabled:
+		return
 	if bodies.size() >= MAX_FRAGMENT_BODIES:
 		return
 	for raw in bodies.duplicate():
@@ -681,6 +686,8 @@ func _body_kind_label(b: SpaceBody) -> String:
 		return "звезда"
 	if b.is_fragment:
 		return "осколок"
+	if b.is_dwarf:
+		return "карликовая планета"
 	return "планета"
 
 
@@ -722,6 +729,7 @@ func _radius_for_mass(mass: float) -> float:
 
 func load_preset(id: String) -> void:
 	current_preset = id
+	collisions_enabled = true
 	following = false
 	_clear()
 	_trail_timer = 0.0
@@ -750,6 +758,7 @@ func load_preset(id: String) -> void:
 
 
 func _preset_solar() -> void:
+	collisions_enabled = false
 	var sun := _create_body(Vector2.ZERO, Vector2.ZERO, 6000000.0, 46.0, Color(1.0, 0.78, 0.3), "Солнце", true)
 	var planets := [
 		{"r": 280.0, "mass": 90.0, "rad": 5.0, "color": Color(0.72, 0.68, 0.6), "name": "Меркурий"},
@@ -761,9 +770,29 @@ func _preset_solar() -> void:
 		{"r": 1500.0, "mass": 3000.0, "rad": 11.0, "color": Color(0.55, 0.88, 0.9), "name": "Уран"},
 		{"r": 1750.0, "mass": 2800.0, "rad": 11.0, "color": Color(0.45, 0.6, 1.0), "name": "Нептун"},
 	]
+	var dwarfs := [
+		{"r": 800.0, "mass": 40.0, "rad": 3.0, "color": Color(0.62, 0.6, 0.55), "name": "Церера"},
+		{"r": 2050.0, "mass": 80.0, "rad": 3.8, "color": Color(0.78, 0.68, 0.58), "name": "Плутон"},
+		{"r": 2250.0, "mass": 70.0, "rad": 4.2, "color": Color(0.88, 0.9, 0.94), "name": "Хаумея"},
+		{"r": 2450.0, "mass": 55.0, "rad": 3.6, "color": Color(0.72, 0.56, 0.48), "name": "Макемаке"},
+		{"r": 2800.0, "mass": 90.0, "rad": 4.0, "color": Color(0.86, 0.88, 0.95), "name": "Эрида"},
+		{"r": 3300.0, "mass": 60.0, "rad": 3.6, "color": Color(0.82, 0.48, 0.42), "name": "Седна"},
+	]
 	var made := {}
 	for p in planets:
-		made[p["name"]] = _orbit_body(sun, float(p["r"]), float(p["mass"]), float(p["rad"]), p["color"], p["name"])
+		var b: SpaceBody = _orbit_body(sun, float(p["r"]), float(p["mass"]), float(p["rad"]), p["color"], p["name"])
+		_script_orbit(b, sun, float(p["r"]))
+		made[p["name"]] = b
+	for p in dwarfs:
+		var d: SpaceBody = _orbit_body(sun, float(p["r"]), float(p["mass"]), float(p["rad"]), p["color"], p["name"])
+		d.is_dwarf = true
+		_script_orbit(d, sun, float(p["r"]))
+		made[p["name"]] = d
+	_set_ring(made["Юпитер"], 1.35, 2.05, Color(0.85, 0.78, 0.62, 0.18), -0.25)
+	_set_ring(made["Сатурн"], 1.35, 2.55, Color(0.96, 0.86, 0.62, 0.68), -0.38)
+	_set_ring(made["Уран"], 1.45, 2.05, Color(0.62, 0.85, 0.9, 0.32), 0.55)
+	_set_ring(made["Нептун"], 1.5, 2.15, Color(0.55, 0.7, 1.0, 0.26), 0.18)
+	_set_ring(made["Хаумея"], 1.45, 2.2, Color(0.8, 0.9, 1.0, 0.45), -0.22)
 	_add_scripted_moon(made["Земля"], 15.0, 8.0, 3.0, Color(0.8, 0.82, 0.85), "Луна")
 	_add_scripted_moon(made["Юпитер"], 26.0, 12.0, 3.5, Color(0.85, 0.75, 0.6), "Ио")
 	_add_scripted_moon(made["Юпитер"], 38.0, 7.0, 2.6, Color(0.9, 0.9, 0.95), "Европа")
@@ -1085,7 +1114,10 @@ func _change_mass(factor: float) -> void:
 		return
 	var b := selected
 	var before := _body_kind_label(b)
-	b.mass = clampf(b.mass * factor, 1.0, 1000000000000.0)
+	var next_mass := clampf(b.mass * factor, 1.0, 1000000000000.0)
+	if b.scripted and next_mass < STAR_MASS:
+		b.scripted = false
+	b.mass = next_mass
 	_apply_mass_kind(b)
 	_refresh_scripted_orbits(b)
 	b.queue_redraw()
@@ -1108,10 +1140,12 @@ func _apply_mass_kind(b: SpaceBody) -> void:
 	if b.mass >= BLACK_HOLE_MASS:
 		b.is_star = true
 		b.is_black_hole = true
+		b.is_dwarf = false
 		b.radius = clampf(10.0 + pow(b.mass, 0.14) * 1.1, 12.0, 30.0)
 	elif b.mass >= STAR_MASS:
 		b.is_star = true
 		b.is_black_hole = false
+		b.is_dwarf = false
 		b.radius = _star_radius(b.mass)
 	else:
 		b.is_star = false
@@ -1126,7 +1160,7 @@ func _apply_mass_kind(b: SpaceBody) -> void:
 
 
 func _rename_body_for_kind(b: SpaceBody, kind: String) -> void:
-	var prefixes := ["Чёрная дыра ", "Черная дыра ", "Звезда ", "Планета ", "Осколок ", "Астероид ", "Комета ", "Чёрная дыра", "Черная дыра", "Звезда", "Планета", "Осколок", "Астероид", "Комета"]
+	var prefixes := ["Карликовая планета ", "Чёрная дыра ", "Черная дыра ", "Звезда ", "Планета ", "Осколок ", "Астероид ", "Комета ", "Карликовая планета", "Чёрная дыра", "Черная дыра", "Звезда", "Планета", "Осколок", "Астероид", "Комета"]
 	var base := b.body_name
 	for p in prefixes:
 		if base.begins_with(p):
@@ -1140,6 +1174,8 @@ func _rename_body_for_kind(b: SpaceBody, kind: String) -> void:
 			title = "Звезда"
 		"планета":
 			title = "Планета"
+		"карликовая планета":
+			title = "Карликовая планета"
 		"осколок":
 			title = "Осколок"
 		_:
@@ -1204,12 +1240,24 @@ func _add_moon(parent: SpaceBody, dist: float, mass: float, rad: float, col: Col
 
 func _add_scripted_moon(parent: SpaceBody, dist: float, mass: float, rad: float, col: Color, nm: String) -> SpaceBody:
 	var moon := _add_moon(parent, dist, mass, rad, col, nm)
-	moon.scripted = true
-	moon.orbit_parent = parent
-	moon.orbit_radius = dist
-	moon.orbit_angle = (moon.position - parent.position).angle()
-	moon.orbit_speed = _circular_speed(parent.mass, dist) / dist
+	_script_orbit(moon, parent, dist)
 	return moon
+
+
+func _script_orbit(b: SpaceBody, parent: SpaceBody, dist: float) -> void:
+	b.scripted = true
+	b.orbit_parent = parent
+	b.orbit_radius = dist
+	b.orbit_angle = (b.position - parent.position).angle()
+	b.orbit_speed = _circular_speed(parent.mass, dist) / dist
+
+
+func _set_ring(b: SpaceBody, inner: float, outer: float, color: Color, tilt: float) -> void:
+	b.ring_inner_ratio = maxf(inner, 1.02)
+	b.ring_outer_ratio = maxf(outer, b.ring_inner_ratio + 0.05)
+	b.ring_color = color
+	b.ring_tilt = tilt
+	b.queue_redraw()
 
 
 func _finish_aim() -> void:

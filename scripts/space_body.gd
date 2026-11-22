@@ -9,8 +9,13 @@ var body_name := "Объект"
 var is_star := false
 var is_black_hole := false
 var is_fragment := false
+var is_dwarf := false
 var selected := false
 var tidal_immune := 0.0
+var ring_inner_ratio := 0.0
+var ring_outer_ratio := 0.0
+var ring_color := Color(0.9, 0.85, 0.7, 0.5)
+var ring_tilt := 0.0
 var trail := PackedVector2Array()
 var scripted := false
 var collides_scripted := false
@@ -27,6 +32,8 @@ func _ready() -> void:
 
 
 func _draw() -> void:
+	if not is_star and ring_outer_ratio > 0.0:
+		_draw_rings()
 	if is_black_hole:
 		var glow := Color(1.0, 0.62, 0.30)
 		draw_circle(Vector2.ZERO, radius * 3.2, Color(glow.r, glow.g, glow.b, 0.05))
@@ -50,3 +57,20 @@ func _draw() -> void:
 
 	if selected:
 		draw_arc(Vector2.ZERO, radius * 1.75, 0.0, TAU, 48, Color(0.75, 0.9, 1.0, 0.95), maxf(1.5, radius * 0.07), true)
+
+
+func _draw_rings() -> void:
+	var segments := 80
+	var inner := radius * ring_inner_ratio
+	var outer := radius * ring_outer_ratio
+	var squash := 0.30
+	var bands := 6
+	for k in bands:
+		var f := float(k) / float(bands - 1)
+		var rr := lerpf(inner, outer, f)
+		var alpha := ring_color.a * (0.45 + 0.55 * sin(f * PI))
+		var pts := PackedVector2Array()
+		for i in segments + 1:
+			var t := TAU * float(i) / float(segments)
+			pts.append(Vector2(cos(t) * rr, sin(t) * rr * squash).rotated(ring_tilt))
+		draw_polyline(pts, Color(ring_color.r, ring_color.g, ring_color.b, alpha), maxf(1.0, radius * 0.09), true)
