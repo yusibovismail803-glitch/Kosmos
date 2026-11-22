@@ -26,6 +26,7 @@ var orbit_eccentricity := 0.0
 var orbit_periapsis := 0.0
 var orbit_angle := 0.0
 var orbit_speed := 0.0
+var surface_temp_k := -1.0
 
 
 func _ready() -> void:

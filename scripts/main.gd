@@ -524,9 +524,11 @@ func _planetary_merge(a: SpaceBody, b: SpaceBody) -> void:
 	var pos := (a.position * a.mass + b.position * b.mass) / total
 	var vel := (a.velocity * a.mass + b.velocity * b.mass) / total
 	var base_color: Color = big.color.lerp(small.color, small.mass / total)
-	# Разогрев ~500-1000C: яркий оранжево-красный оттенок
-	var heat := _rng.randf_range(0.65, 0.9)
-	var hot_color := base_color.lerp(Color(1.0, 0.28, 0.08), heat)
+	# Разогрев ~500-1000C
+	var impact_c := _rng.randf_range(500.0, 1000.0)
+	var impact_k := impact_c + 273.15
+	var heat_t := clampf((impact_c - 500.0) / 500.0, 0.0, 1.0)
+	var hot_color := base_color.lerp(Color(1.0, 0.28, 0.08), lerpf(0.65, 0.9, heat_t))
 
 	var frag_count := clampi(int(round(2.0 + total / 1800.0)), 2, 5)
 	var frag_total_mass := total * 0.08
@@ -548,16 +550,18 @@ func _planetary_merge(a: SpaceBody, b: SpaceBody) -> void:
 		frag.is_fragment = true
 		frag.tidal_immune = 5.0
 		frag.orbit_parent = null
-		_start_planet_cooling(frag, frag_hot, base_color.lightened(_rng.randf_range(0.0, 0.2)), 3.0)
+		frag.surface_temp_k = impact_k * _rng.randf_range(0.85, 1.0)
+		_start_planet_cooling(frag, frag_hot, base_color.lightened(_rng.randf_range(0.0, 0.2)), 3.0, frag.surface_temp_k)
 
 	var remnant_mass := total - frag_total_mass
 	var remnant := _create_body(pos, vel, remnant_mass, sqrt(maxf(1.0, remnant_mass)) * 0.5, hot_color, big.body_name)
 	remnant.is_dwarf = big.is_dwarf or small.is_dwarf
 	remnant.ring_inner_ratio = 0.0
 	remnant.ring_outer_ratio = 0.0
+	remnant.surface_temp_k = impact_k
 	_apply_mass_kind(remnant)
 	remnant.queue_redraw()
-	_start_planet_cooling(remnant, hot_color, base_color, 5.0)
+	_start_planet_cooling(remnant, hot_color, base_color, 5.0, impact_k)
 
 	bodies.erase(a)
 	bodies.erase(b)
@@ -571,17 +575,27 @@ func _planetary_merge(a: SpaceBody, b: SpaceBody) -> void:
 	hud.show_hint("Столкновение планет: образовалась новая планета и мелкие обломки")
 
 
-func _start_planet_cooling(b: SpaceBody, hot_color: Color, target_color: Color, dur: float = 4.0) -> void:
+func _start_planet_cooling(b: SpaceBody, hot_color: Color, target_color: Color, dur: float = 4.0, start_temp_k: float = -1.0) -> void:
 	var body_ref: WeakRef = weakref(b)
 	var tw := create_tween()
-	tw.tween_method(func(c: Color):
+	tw.tween_method(func(t: float):
 		var obj: Object = body_ref.get_ref()
 		if obj != null and is_instance_valid(obj):
 			var sb := obj as SpaceBody
 			if sb != null:
-				sb.color = c
+				sb.color = hot_color.lerp(target_color, t)
+				if start_temp_k > 0.0:
+					sb.surface_temp_k = lerpf(start_temp_k, -1.0, t)
 				sb.queue_redraw()
-	, hot_color, target_color, dur)
+	, 0.0, 1.0, dur)
+	if start_temp_k > 0.0:
+		tw.finished.connect(func():
+			var obj: Object = body_ref.get_ref()
+			if obj != null and is_instance_valid(obj):
+				var sb := obj as SpaceBody
+				if sb != null:
+					sb.surface_temp_k = -1.0
+		)
 
 
 func _disrupt(b: SpaceBody, star: SpaceBody) -> void:
@@ -804,6 +818,8 @@ func _info_text() -> String:
 				t += "\nДо звезды: %s · T ≈ %s" % [_fmt_number(d), _fmt_temp(_temperature_at(star, d))]
 			else:
 				t += "\nДо звезды: — · T ≈ 3 K"
+			if selected.surface_temp_k > 0.0:
+				t += "\nНагрев: ~%.0f°C" % (selected.surface_temp_k - 273.15)
 	else:
 		t += "\nКоснитесь объекта, чтобы выбрать его"
 	return t
