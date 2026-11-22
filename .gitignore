@@ -1,0 +1,18 @@
+# Hefesto: lo que no debe subir a GitHub
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+.agent/
+.papelera/
+.godot/
+.import/
+export_presets.cfg.bak
+juego.apk
+juego.apk.idsig
+export_presets.cfg
+juego-web.zip
+juego-*.x86_64
+juego-*.exe
+juego-*.pck
+web/
