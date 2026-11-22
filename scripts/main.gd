@@ -35,6 +35,7 @@ var STAR_PALETTE := [
 @onready var world: Node2D = $World
 @onready var camera: Camera2D = $Camera2D
 @onready var hud = $UI
+@onready var music = $SpaceMusic
 
 var bodies: Array[SpaceBody] = []
 var speed_index := 2
@@ -80,6 +81,7 @@ func _ready() -> void:
 	satellite_distance = hud.initial_satellite_distance()
 	orbit_eccentricity = hud.initial_orbit_eccentricity()
 	show_barycenter = hud.initial_barycenter()
+	music.set_enabled(hud.initial_music_enabled())
 	hud.show_hint("Коснитесь объекта — откроется редактор · «Тело» — создать объект")
 	load_preset("solar")
 	_refresh_hud()
@@ -528,6 +530,9 @@ func _on_action(action: String) -> void:
 	if action.begins_with("barycenter:"):
 		show_barycenter = action.ends_with("1")
 		hud.show_hint("Барицентр " + ("включён" if show_barycenter else "выключен"))
+		return
+	if action.begins_with("music:"):
+		music.set_enabled(action.ends_with("1"))
 		return
 	if action.begins_with("visual:"):
 		visual_mode = action.substr(7)
@@ -1093,9 +1098,11 @@ func _change_mass(factor: float) -> void:
 				hud.show_hint("%s стал звездой" % b.body_name)
 			_:
 				hud.show_hint("%s остыл до планеты" % b.body_name)
+	_refresh_hud()
 
 
 func _apply_mass_kind(b: SpaceBody) -> void:
+	var was_label := _body_kind_label(b)
 	var was_star := b.is_star
 	var was_black_hole := b.is_black_hole
 	if b.mass >= BLACK_HOLE_MASS:
@@ -1113,6 +1120,31 @@ func _apply_mass_kind(b: SpaceBody) -> void:
 	if b.scripted and ((b.is_black_hole and not was_black_hole) or (b.is_star and not was_star)):
 		b.scripted = false
 		b.orbit_parent = null
+	var after_label := _body_kind_label(b)
+	if after_label != was_label:
+		_rename_body_for_kind(b, after_label)
+
+
+func _rename_body_for_kind(b: SpaceBody, kind: String) -> void:
+	var prefixes := ["Чёрная дыра ", "Черная дыра ", "Звезда ", "Планета ", "Осколок ", "Астероид ", "Комета ", "Чёрная дыра", "Черная дыра", "Звезда", "Планета", "Осколок", "Астероид", "Комета"]
+	var base := b.body_name
+	for p in prefixes:
+		if base.begins_with(p):
+			base = base.substr(p.length())
+			break
+	var title: String
+	match kind:
+		"чёрная дыра":
+			title = "Чёрная дыра"
+		"звезда":
+			title = "Звезда"
+		"планета":
+			title = "Планета"
+		"осколок":
+			title = "Осколок"
+		_:
+			title = kind.capitalize()
+	b.body_name = title if base.strip_edges().is_empty() else "%s %s" % [title, base]
 
 
 func _refresh_scripted_orbits(changed: SpaceBody) -> void:

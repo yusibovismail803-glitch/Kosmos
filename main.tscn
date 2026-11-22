@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/starfield.gd" id="2_star"]
 [ext_resource type="Script" path="res://scripts/hud.gd" id="3_hud"]
+[ext_resource type="Script" path="res://scripts/space_music.gd" id="4_music"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -20,3 +21,6 @@ z_index = 1
 
 [node name="UI" type="CanvasLayer" parent="."]
 script = ExtResource("3_hud")
+
+[node name="SpaceMusic" type="AudioStreamPlayer" parent="."]
+script = ExtResource("4_music")

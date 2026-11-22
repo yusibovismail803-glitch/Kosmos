@@ -40,6 +40,8 @@ var _visual_buttons := {}
 var _satellite_distance := 24.0
 var _orbit_eccentricity := 0.0
 var _show_barycenter := true
+var _music_enabled := true
+var _music_check: CheckButton
 var _ecc_label: Label
 var _ecc_slider: HSlider
 var _sat_slider: HSlider
@@ -170,6 +172,7 @@ func _load_settings() -> void:
 		_satellite_distance = clampf(float(cf.get_value("ui", "sat_dist", 24.0)), 12.0, 160.0)
 		_orbit_eccentricity = clampf(float(cf.get_value("ui", "orbit_ecc", 0.0)), 0.0, 0.75)
 		_show_barycenter = bool(cf.get_value("ui", "barycenter", true))
+		_music_enabled = bool(cf.get_value("ui", "music", true))
 	_apply_accent_vars()
 
 
@@ -181,6 +184,7 @@ func _save_settings() -> void:
 	cf.set_value("ui", "sat_dist", _satellite_distance)
 	cf.set_value("ui", "orbit_ecc", _orbit_eccentricity)
 	cf.set_value("ui", "barycenter", _show_barycenter)
+	cf.set_value("ui", "music", _music_enabled)
 	cf.save(SETTINGS_PATH)
 
 
@@ -198,6 +202,10 @@ func initial_orbit_eccentricity() -> float:
 
 func initial_barycenter() -> bool:
 	return _show_barycenter
+
+
+func initial_music_enabled() -> bool:
+	return _music_enabled
 
 
 func _apply_accent_vars() -> void:
@@ -778,6 +786,14 @@ func _build_settings_overlay() -> void:
 	bary.toggled.connect(_on_barycenter_toggled)
 	box.add_child(bary)
 
+	_music_check = CheckButton.new()
+	_music_check.text = "Музыка космоса"
+	_music_check.button_pressed = _music_enabled
+	_music_check.add_theme_font_size_override("font_size", 24)
+	_music_check.add_theme_color_override("font_color", ON_SURFACE)
+	_music_check.toggled.connect(_on_music_toggled)
+	box.add_child(_music_check)
+
 	var close := _make_button("Готово", 240.0, "primary")
 	close.custom_minimum_size = Vector2(240.0, 88.0)
 	close.add_theme_font_size_override("font_size", 26)
@@ -967,6 +983,12 @@ func _on_barycenter_toggled(on: bool) -> void:
 	_show_barycenter = on
 	_save_settings()
 	action.emit("barycenter:" + ("1" if on else "0"))
+
+
+func _on_music_toggled(on: bool) -> void:
+	_music_enabled = on
+	_save_settings()
+	action.emit("music:" + ("1" if on else "0"))
 
 
 func show_hint(text: String) -> void:
