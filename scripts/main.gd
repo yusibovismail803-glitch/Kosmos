@@ -54,6 +54,7 @@ var visual_mode := "tail"
 var _rng := RandomNumberGenerator.new()
 var _trail_timer := 0.0
 var _hud_timer := 0.0
+var _cooling_tweens: Array[Tween] = []
 
 var _touches: Dictionary = {}
 var _single_id := -1
@@ -144,6 +145,10 @@ func _draw_orbit(b: SpaceBody) -> void:
 	var c := Color(b.color.r, b.color.g, b.color.b, 0.38 if not b.is_star else 0.28)
 	var width: float = maxf(1.0, 1.4 / camera.zoom.x)
 	if b.scripted:
+		# Звёзды в барицентре рисуем по реальной траектории, а не кругом
+		if b.is_star and b.orbit_parent == null and b.trail.size() > 1:
+			draw_polyline(b.trail, c, width, true)
+			return
 		var ecc: float = clampf(b.orbit_eccentricity, 0.0, 0.95)
 		if ecc > 0.0001:
 			var a: float = radius
@@ -155,7 +160,10 @@ func _draw_orbit(b: SpaceBody) -> void:
 			draw_arc(center, radius, 0.0, TAU, 128, c, width, true)
 		return
 	if b.is_star and bool(orbit.get("barycentric", false)):
-		draw_arc(center, radius, 0.0, TAU, 128, c, width, true)
+		if b.trail.size() > 1:
+			draw_polyline(b.trail, c, width, true)
+		else:
+			draw_arc(center, radius, 0.0, TAU, 128, c, width, true)
 		return
 	var ellipse := _orbit_ellipse_for(b, orbit)
 	if not bool(ellipse.get("valid", false)):
@@ -588,14 +596,27 @@ func _start_planet_cooling(b: SpaceBody, hot_color: Color, target_color: Color, 
 					sb.surface_temp_k = lerpf(start_temp_k, -1.0, t)
 				sb.queue_redraw()
 	, 0.0, 1.0, dur)
-	if start_temp_k > 0.0:
-		tw.finished.connect(func():
+	_cooling_tweens.append(tw)
+	tw.finished.connect(func():
+		_cooling_tweens.erase(tw)
+		if start_temp_k > 0.0:
 			var obj: Object = body_ref.get_ref()
 			if obj != null and is_instance_valid(obj):
 				var sb := obj as SpaceBody
 				if sb != null:
 					sb.surface_temp_k = -1.0
-		)
+	)
+	if paused:
+		tw.pause()
+
+
+func _sync_cooling_pause() -> void:
+	for tw in _cooling_tweens:
+		if tw != null and tw.is_valid():
+			if paused:
+				tw.pause()
+			else:
+				tw.play()
 
 
 func _disrupt(b: SpaceBody, star: SpaceBody) -> void:
@@ -678,8 +699,6 @@ func _record_trails(delta: float) -> void:
 		return
 	_trail_timer = 0.0
 	for b in bodies:
-		if b.is_fragment or visual_mode != "tail":
-			continue
 		if b.velocity.length() < 0.4 and not b.is_star:
 			continue
 		b.trail.append(b.position)
@@ -716,8 +735,6 @@ func _on_action(action: String) -> void:
 	if action.begins_with("visual:"):
 		visual_mode = action.substr(7)
 		hud.set_visual_mode(visual_mode)
-		for b in bodies:
-			b.trail.clear()
 		queue_redraw()
 		var label := "хвост"
 		if visual_mode == "orbit":
@@ -729,6 +746,7 @@ func _on_action(action: String) -> void:
 	match action:
 		"pause":
 			paused = not paused
+			_sync_cooling_pause()
 		"speed_down":
 			speed_index = maxi(0, speed_index - 1)
 		"speed_up":
@@ -878,6 +896,10 @@ func _select(b: SpaceBody) -> void:
 
 
 func _clear() -> void:
+	for tw in _cooling_tweens:
+		if tw != null and tw.is_valid():
+			tw.kill()
+	_cooling_tweens.clear()
 	for b in bodies:
 		b.visible = false
 		b.queue_free()
