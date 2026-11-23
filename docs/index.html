@@ -69,6 +69,10 @@
   a{color:#9dc0ff}
   .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
   .chip{font-size:12px;color:#b9c7ee;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:rgba(255,255,255,.03)}
+  .shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+  .shot{display:block;background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;text-decoration:none;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .shot img{display:block;width:100%;height:auto}
+  .shot span{display:block;padding:10px 14px;color:var(--muted);font-size:13px}
   @media (max-width:520px){ .wrap{padding-top:26px} .logo{width:64px;height:64px} }
 </style>
 </head>
@@ -96,6 +100,15 @@
     <div class="card"><span class="icon">🌌</span><h3>Туманности</h3><p>Цветные облака газа после мощных столкновений медленно дрейфуют в пространстве.</p></div>
     <div class="card"><span class="icon">🛰️</span><h3>Песочница</h3><p>Создавайте объекты касанием, меняйте массу, включайте паузу и скорость времени.</p></div>
   </div>
+
+  <section>
+    <h2>Скриншоты</h2>
+    <div class="shots">
+      <a class="shot" href="screenshots/01_solar_system.png" target="_blank" rel="noopener"><img src="screenshots/01_solar_system.png" alt="Солнечная система и орбиты планет" loading="lazy"><span>Солнечная система и орбиты</span></a>
+      <a class="shot" href="screenshots/02_saturn_editor.png" target="_blank" rel="noopener"><img src="screenshots/02_saturn_editor.png" alt="Сатурн, кольца и редактор объекта" loading="lazy"><span>Сатурн, кольца и редактор</span></a>
+      <a class="shot" href="screenshots/03_black_hole.png" target="_blank" rel="noopener"><img src="screenshots/03_black_hole.png" alt="Чёрная дыра с аккреционным диском" loading="lazy"><span>Чёрная дыра и аккреционный диск</span></a>
+    </div>
+  </section>
 
   <section>
     <h2>Установка</h2>
