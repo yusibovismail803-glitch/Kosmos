@@ -942,8 +942,6 @@ func load_preset(id: String) -> void:
 			_preset_comet()
 		"tidal":
 			_preset_tidal()
-		"moons":
-			_preset_moons()
 		"empty":
 			_preset_empty()
 		_:
@@ -1086,19 +1084,6 @@ func _preset_tidal() -> void:
 	var speed := sqrt(G * sun.mass / r) * 0.45
 	_create_body(Vector2(r, 0.0), Vector2(0.0, speed), 900.0, 11.0, Color(0.85, 0.7, 0.95), "Гигант")
 	hud.show_hint("«Гигант» упадёт на звезду и разорвётся — включи скорость ×8")
-
-
-func _preset_moons() -> void:
-	var sun := _create_body(Vector2.ZERO, Vector2.ZERO, 6000000.0, 46.0, Color(1.0, 0.78, 0.3), "Солнце", true)
-	var giant := _orbit_body(sun, 760.0, 80000.0, 17.0, Color(0.93, 0.82, 0.6), "Газовый гигант")
-	var moon_cols := [
-		Color(0.85, 0.75, 0.6), Color(0.9, 0.9, 0.95), Color(0.75, 0.85, 0.8),
-		Color(0.95, 0.8, 0.55), Color(0.7, 0.8, 0.95),
-	]
-	for i in 4:
-		_add_moon(giant, 30.0 + i * 10.0, 1.0 + i * 0.5, 2.2 + i * 0.2, moon_cols[i], "Луна %d" % (i + 1))
-	var rocky := _orbit_body(sun, 380.0, 20000.0, 8.0, Color(0.5, 0.75, 1.0), "Океанида")
-	_add_moon(rocky, 15.0, 4.0, 2.2, Color(0.85, 0.85, 0.9), "Спутник")
 
 
 func _preset_empty() -> void:
@@ -1404,6 +1389,8 @@ func _refresh_scripted_orbits(changed: SpaceBody) -> void:
 		if not s.scripted or s == changed or s.orbit_radius <= 0.0:
 			continue
 		if s.orbit_parent == changed:
+			if changed.is_star and not s.is_star:
+				continue
 			s.orbit_speed = _circular_speed(changed.mass, s.orbit_radius) / s.orbit_radius
 		elif changed.is_star and s.is_star and s.orbit_parent == null:
 			s.orbit_speed = sqrt(G * total_star_mass / pow(s.orbit_radius, 3.0))

@@ -617,7 +617,7 @@ func _build_scenes_overlay() -> void:
 	box.add_child(title)
 
 	var sub := Label.new()
-	sub.text = "8 базовых и %d систем · свайпайте или листайте" % SYSTEMS.LIST.size()
+	sub.text = "7 базовых и %d систем · свайпайте или листайте" % SYSTEMS.LIST.size()
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_size_override("font_size", 22)
 	sub.add_theme_color_override("font_color", ON_VARIANT)
@@ -644,7 +644,6 @@ func _build_scenes_overlay() -> void:
 		["collision", "Столкновение"],
 		["comet", "Комета"],
 		["tidal", "Приливной разрыв"],
-		["moons", "Планета и луны"],
 		["empty", "Пустая система"],
 	]
 	for sys in SYSTEMS.LIST:
