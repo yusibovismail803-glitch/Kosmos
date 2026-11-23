@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Космос — космический симулятор</title>
+<meta name="description" content="Космос — космический симулятор на Godot 4.7 для Android: гравитация, столкновения планет и звёзд, сверхновые, чёрные дыры, туманности и Солнечная система.">
+<link rel="icon" href="icon.jpg">
+<style>
+  :root{
+    --bg:#05060d; --panel:rgba(18,22,38,.78); --line:rgba(120,150,255,.18);
+    --text:#e8ecff; --muted:#9aa4c7; --accent:#6ea8ff; --accent2:#9d7bff; --hot:#ff8a5c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    color:var(--text); background:var(--bg); line-height:1.55; overflow-x:hidden;
+  }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:-2;
+    background:
+      radial-gradient(900px 600px at 15% 10%, rgba(110,168,255,.20), transparent 60%),
+      radial-gradient(800px 600px at 85% 20%, rgba(157,123,255,.18), transparent 60%),
+      radial-gradient(700px 500px at 50% 110%, rgba(255,138,92,.10), transparent 60%),
+      linear-gradient(180deg,#05060d 0%,#080b18 50%,#05060d 100%);
+  }
+  body::after{
+    content:""; position:fixed; inset:0; z-index:-1; opacity:.55;
+    background-image:
+      radial-gradient(1px 1px at 12% 18%, #fff, transparent),
+      radial-gradient(1px 1px at 28% 62%, #cfe0ff, transparent),
+      radial-gradient(1px 1px at 44% 34%, #fff, transparent),
+      radial-gradient(1px 1px at 63% 74%, #dfe8ff, transparent),
+      radial-gradient(1px 1px at 77% 22%, #fff, transparent),
+      radial-gradient(1px 1px at 88% 58%, #cfe0ff, transparent),
+      radial-gradient(1px 1px at 8% 82%, #fff, transparent),
+      radial-gradient(1px 1px at 52% 90%, #fff, transparent),
+      radial-gradient(1px 1px at 36% 8%, #fff, transparent),
+      radial-gradient(1px 1px at 70% 46%, #fff, transparent);
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:40px 20px 64px}
+  header{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .logo{width:84px;height:84px;border-radius:20px;object-fit:cover;border:1px solid var(--line);box-shadow:0 10px 40px rgba(80,120,255,.35)}
+  h1{font-size:clamp(34px,7vw,58px);margin:0;letter-spacing:-.02em;line-height:1.05}
+  .tag{color:var(--muted);margin:6px 0 0;font-size:15px}
+  .badge{display:inline-block;margin-top:10px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:#bcd0ff;background:rgba(110,168,255,.08)}
+  .cta{display:flex;gap:12px;flex-wrap:wrap;margin:28px 0 8px}
+  .btn{display:inline-flex;align-items:center;gap:10px;padding:14px 22px;border-radius:14px;text-decoration:none;font-weight:650;font-size:16px;border:1px solid transparent;transition:transform .15s ease,box-shadow .15s ease}
+  .btn:hover{transform:translateY(-2px)}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0a0f24;box-shadow:0 12px 30px rgba(110,168,255,.35)}
+  .btn-ghost{background:rgba(255,255,255,.04);color:var(--text);border-color:var(--line)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:34px 0 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px 18px 16px;backdrop-filter:blur(8px)}
+  .card h3{margin:0 0 6px;font-size:16px}
+  .card p{margin:0;color:var(--muted);font-size:14px}
+  .icon{font-size:20px;display:block;margin-bottom:8px}
+  section{margin-top:40px}
+  h2{font-size:22px;margin:0 0 12px}
+  .steps{counter-reset:s;display:grid;gap:10px}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px 14px 52px;position:relative;color:#cfd8f5}
+  .step::before{counter-increment:s;content:counter(s);position:absolute;left:14px;top:12px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(110,168,255,.15);color:#bcd0ff;font-weight:700;font-size:13px}
+  .linkbox{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:#0a0e1e;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+  .linkbox code{color:#a8c4ff;word-break:break-all;font-size:13px}
+  .copy{background:rgba(110,168,255,.14);color:#cfe0ff;border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:13px;cursor:pointer}
+  .copy:active{transform:scale(.97)}
+  .note{color:var(--muted);font-size:13px;margin-top:8px}
+  footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
+  a{color:#9dc0ff}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .chip{font-size:12px;color:#b9c7ee;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:rgba(255,255,255,.03)}
+  @media (max-width:520px){ .wrap{padding-top:26px} .logo{width:64px;height:64px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img class="logo" src="icon.jpg" alt="Иконка Космос">
+    <div>
+      <h1>Космос</h1>
+      <p class="tag">Космический симулятор на Godot 4.7 для Android</p>
+      <span class="badge">Версия 1.6.3</span>
+    </div>
+  </header>
+
+  <div class="cta">
+    <a class="btn btn-primary" href="https://github.com/yusibovismail803-glitch/Kosmos/releases/latest/download/Kosmos.apk">⬇ Скачать APK</a>
+    <a class="btn btn-ghost" href="https://github.com/yusibovismail803-glitch/Kosmos">Исходный код на GitHub</a>
+  </div>
+
+  <div class="grid">
+    <div class="card"><span class="icon">🪐</span><h3>Гравитация</h3><p>Планеты, звёзды и спутники движутся по реальным орбитам; Солнечная система и экзопланетные системы.</p></div>
+    <div class="card"><span class="icon">💥</span><h3>Столкновения</h3><p>Планеты нагреваются до 500–1000 °C, рассыпают мелкие обломки и оставляют новую планету.</p></div>
+    <div class="card"><span class="icon">✨</span><h3>Сверхновые</h3><p>Столкновение массивных звёзд рождает сверхновую, туманность и чёрную дыру в центре.</p></div>
+    <div class="card"><span class="icon">🕳️</span><h3>Чёрные дыры</h3><p>Коллапс массы, аккреционное свечение и приливной разрыв слишком близких планет.</p></div>
+    <div class="card"><span class="icon">🌌</span><h3>Туманности</h3><p>Цветные облака газа после мощных столкновений медленно дрейфуют в пространстве.</p></div>
+    <div class="card"><span class="icon">🛰️</span><h3>Песочница</h3><p>Создавайте объекты касанием, меняйте массу, включайте паузу и скорость времени.</p></div>
+  </div>
+
+  <section>
+    <h2>Установка</h2>
+    <div class="steps">
+      <div class="step">Скачайте <b>Kosmos.apk</b> по кнопке выше.</div>
+      <div class="step">Разрешите установку из неизвестных источников для браузера или файлового менеджера.</div>
+      <div class="step">Откройте APK и нажмите «Установить».</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ссылка для магазинов</h2>
+    <p class="note">Прямая ссылка на последнюю версию APK (подходит для Orion Store и подобных):</p>
+    <div class="linkbox">
+      <code id="apk-url">https://github.com/yusibovismail803-glitch/Kosmos/releases/latest/download/Kosmos.apk</code>
+      <button class="copy" onclick="copyLink()">Скопировать</button>
+    </div>
+    <p class="note" id="copied" style="display:none;color:#8ef0b5">Ссылка скопирована</p>
+  </section>
+
+  <section>
+    <h2>Управление</h2>
+    <p class="note">Один палец — обзор, два пальца — масштаб. Коснитесь объекта, чтобы выбрать его и увидеть характеристики. Кнопки на экране: пауза, скорость, создание, спутник, масса, цвет, следование и удаление.</p>
+    <div class="chips">
+      <span class="chip">Godot 4.7</span>
+      <span class="chip">GL Compatibility</span>
+      <span class="chip">Android</span>
+      <span class="chip">Тач-управление</span>
+      <span class="chip">Русский язык</span>
+    </div>
+  </section>
+
+  <footer>
+    <span>© 2026 Космос</span>
+    <span><a href="https://github.com/yusibovismail803-glitch/Kosmos/releases">Все релизы</a> · <a href="https://github.com/yusibovismail803-glitch/Kosmos">GitHub</a></span>
+  </footer>
+</div>
+<script>
+function copyLink(){
+  var text = document.getElementById('apk-url').textContent;
+  var done = function(){ var n=document.getElementById('copied'); n.style.display='block'; setTimeout(function(){n.style.display='none'},1800); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(function(){ fallback(text, done); });
+  } else { fallback(text, done); }
+}
+function fallback(text, done){
+  var ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); done(); }catch(e){}
+  document.body.removeChild(ta);
+}
+</script>
+</body>
+</html>
